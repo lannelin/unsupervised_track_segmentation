@@ -26,6 +26,7 @@ Original implementation available [here](https://github.com/kanezaki/pytorch-uns
     - maybe run simultaneously?
 - [ ] scribbles?
 - [ ] validation during training?
+- [ ] poetry?
 
 
 ## Notes
