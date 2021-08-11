@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 
 import torch
 import torch.nn as nn
-from pytorch_lightning import LightningModule, Trainer, seed_everything
+from pytorch_lightning import LightningModule
 from torch.nn import functional as F
 
 
@@ -45,17 +45,16 @@ class MyNet(nn.Module):
 class UnsupervisedSemSegment(LightningModule):
     def __init__(
         self,
-        n_clusters: int,
+        n_channels: int,
         similarity_weight: float = 1.0,
         connectivity_weight: float = 1.0,
-        min_labels: int = 3,
         lr: float = 0.1,
     ):
         """
         Args:
+            n_channels: no. of channels to allow for in output
             similarity_weight: weight for similarity loss component (default 1.0)
             connectivity_weight: weight for connectivity loss component (defafult 1.0)
-            min_labels: minimum number of labels for segmentation - early exit once reached (default 3)
             lr: learning (default 0.1)
         """
         super().__init__()
@@ -64,11 +63,10 @@ class UnsupervisedSemSegment(LightningModule):
 
         self.similarity_weight = similarity_weight
         self.connectivity_weight = connectivity_weight
-        self.min_labels = min_labels
         self.lr = lr
-        self.n_clusters = n_clusters
+        self.n_channels = n_channels
 
-        self.net = MyNet(input_dim=3, n_channel=n_clusters, n_conv=2)
+        self.net = MyNet(input_dim=3, n_channel=n_channels, n_conv=2)
 
         self.similarity_loss_fn = nn.CrossEntropyLoss()
         self.connectivity_loss_fn = nn.L1Loss(reduction="mean")
@@ -104,7 +102,7 @@ class UnsupervisedSemSegment(LightningModule):
 
         # loss
         loss_similarity = self.similarity_loss_fn(
-            output.reshape(-1, self.n_clusters), target.reshape(-1)
+            output.reshape(-1, self.n_channels), target.reshape(-1)
         )
         loss_val = (
             self.similarity_weight * loss_similarity
@@ -161,7 +159,6 @@ class UnsupervisedSemSegment(LightningModule):
         """
         similarity_weight: weight for similarity loss component (default 1.0)
            connectivity_weight: weight for connectivity loss component (defafult 1.0)
-           min_label: minimum number of labels for segmentation - early exit once reached (default 3)
            lr: learning (default 0.11)
         """
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
@@ -177,44 +174,6 @@ class UnsupervisedSemSegment(LightningModule):
             default=1.0,
             help="weight for connectivity loss component",
         )
-        parser.add_argument(
-            "--min_labels",
-            type=int,
-            default=3,
-            help="minimum number of labels for segmentation - early exit once reached",
-        )
         parser.add_argument("--lr", type=float, default=0.1, help="SGD: learning rate")
 
         return parser
-
-
-def cli_main():
-    from track_segmentation.unsupervised_segmentation.datamodule import (
-        UnsupervisedSegmentationDataModule,
-    )
-
-    seed_everything(1)
-
-    parser = ArgumentParser()
-    # trainer args
-    parser = Trainer.add_argparse_args(parser)
-    # model args
-    parser = UnsupervisedSemSegment.add_model_specific_args(parser)
-    # datamodule args
-    parser = UnsupervisedSegmentationDataModule.add_argparse_args(parser)
-
-    args = parser.parse_args()
-
-    # data
-    dm = UnsupervisedSegmentationDataModule(args.data_dir).from_argparse_args(args)
-
-    # model
-    model = UnsupervisedSemSegment(**args.__dict__)
-
-    # train
-    trainer = Trainer().from_argparse_args(args)
-    trainer.fit(model, datamodule=dm)
-
-
-if __name__ == "__main__":
-    cli_main()
