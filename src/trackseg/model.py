@@ -1,9 +1,13 @@
 from argparse import ArgumentParser
+from typing import Tuple
 
 import torch
 import torch.nn as nn
 from pytorch_lightning import LightningModule
 from torch.nn import functional as F
+
+# isort:imports-firstparty
+from trackseg.utils import binary_iou
 
 
 # CNN model
@@ -74,8 +78,8 @@ class UnsupervisedSemSegment(LightningModule):
     def forward(self, x):
         return self.net(x)
 
-    def _step(self, batch):
-        output = self.net(batch)
+    def _step(self, images):
+        output = self.net(images)
         output = output.permute(0, 2, 3, 1)  # Height Width Channels
 
         # calc l1 losses to shifted pixels
@@ -116,7 +120,8 @@ class UnsupervisedSemSegment(LightningModule):
         return loss_val, avg_n_labels
 
     def training_step(self, batch, batch_nb):
-        loss_val, avg_n_labels = self._step(batch)
+        images, _ = batch
+        loss_val, avg_n_labels = self._step(images=images)
 
         self.log(
             "train_loss",
@@ -136,13 +141,53 @@ class UnsupervisedSemSegment(LightningModule):
         )
         return loss_val
 
+    @staticmethod
+    def _iou_score(pred: torch.Tensor, target: torch.Tensor) -> Tuple[float, float]:
+        pred_classes = torch.unique(pred)
+        true_classes = torch.unique(target)
+        len(pred_classes), len(true_classes)
+
+        all_ious = torch.zeros((len(pred_classes), len(true_classes)))
+        for i, pred_class in enumerate(pred_classes):
+            a = (pred == pred_class).int()
+            for j, true_class in enumerate(true_classes):
+                b = (target == true_class).int()
+                all_ious[i, j] = binary_iou(a, b)
+
+        # TODO review - allows single assigned cluster to match many truth clusters
+        # review-cont: is this possible to game accidently?
+        # take max along prediction dim - getting best match for each truth cluster
+        score_a = all_ious.max(dim=0).values.mean()
+        # max along truth dim - getting best match for each prediction cluster
+        # (penalises small prediction clusters?)
+        score_b = all_ious.max(dim=1).values.mean()
+
+        return score_a, score_b
+
+    # TODO or test?
     def validation_step(self, batch, batch_idx):
-        loss_val = self._step(batch)
-        return loss_val
+        ims, targets = batch
+        targets = targets.cpu()
+
+        out = self.net(ims).detach().cpu()
+        preds = out.argmax(dim=1)
+
+        scores = torch.zeros(len(ims), 2)
+        for i, (pred, target) in enumerate(zip(preds, targets)):
+            scores[i] = torch.FloatTensor(self._iou_score(pred=pred, target=target))
+
+        return scores
 
     def validation_epoch_end(self, outputs):
-        loss_val = torch.stack([x["val_loss"] for x in outputs]).mean()
-        log_dict = {"val_loss": loss_val}
+        loss_vals = torch.stack(outputs).squeeze(1).mean(dim=0)
+        loss_best_truth = loss_vals[0]
+        loss_best_pred = loss_vals[1]
+        loss_val = loss_vals.mean()
+        log_dict = {
+            "loss_best_truth": loss_best_truth,
+            "loss_best_pred": loss_best_pred,
+            "val_loss": loss_val
+        }
 
         # TODO consistency with train step logging
         return {

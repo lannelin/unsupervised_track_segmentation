@@ -19,13 +19,17 @@ IMAGENET_MEANS = [0.485, 0.456, 0.406]
 IMAGENET_STDS = [0.229, 0.224, 0.225]
 
 
-def normalize_resize_transforms(
+def get_transforms(
+    normalize: Optional[bool],
     resize_size: Optional[Tuple[int, int]],
 ) -> Callable:
     transforms = list()
     if resize_size is not None:
         transforms.append(transform_lib.Resize(size=resize_size))
-    transforms.append(transform_lib.Normalize(mean=IMAGENET_MEANS, std=IMAGENET_STDS))
+    if normalize is not None and normalize:
+        transforms.append(
+            transform_lib.Normalize(mean=IMAGENET_MEANS, std=IMAGENET_STDS)
+        )
     transforms.append(transform_lib.ToTensor())
     transforms = transform_lib.Compose(transforms)
 
@@ -143,7 +147,8 @@ class UnsupervisedSegmentationDataModule(LightningDataModule):
 
         # TODO im size??
 
-        transforms = self.train_transforms or normalize_resize_transforms(
+        transforms = self.train_transforms or get_transforms(
+            normalize=True,
             resize_size=self.resize_size,
         )
 
@@ -180,6 +185,7 @@ class SingleImageDataModule(LightningDataModule):
         num_workers: int = 1,
         seed: int = 42,
         pin_memory: bool = False,
+        normalize: Optional[bool] = None,
         *args: Any,
         **kwargs: Any,
     ):
@@ -198,8 +204,8 @@ class SingleImageDataModule(LightningDataModule):
         self.pin_memory = pin_memory
         self.drop_last = False
 
-        transforms = self.train_transforms or normalize_resize_transforms(
-            resize_size=self.resize_size,
+        transforms = self.train_transforms or get_transforms(
+            normalize=normalize, resize_size=self.resize_size
         )
         self.train_dataset = SingleImageDataset(
             image=image, target=target, transform=transforms
