@@ -53,7 +53,7 @@ dm = KittiDataModule(
     seed=SEED,
     num_workers=0,
 )
-dl = dm.test_dataloader()
+dl = dm.val_dataloader()
 
 assert dl.batch_size == 1
 
