@@ -179,22 +179,43 @@ class UnsupervisedSemSegment(LightningModule):
         return scores
 
     def validation_epoch_end(self, outputs):
-        loss_vals = torch.stack(outputs).squeeze(1).mean(dim=0)
-        loss_best_truth = loss_vals[0]
-        loss_best_pred = loss_vals[1]
-        loss_val = loss_vals.mean()
-        log_dict = {
-            "loss_best_truth": loss_best_truth,
-            "loss_best_pred": loss_best_pred,
-            "val_loss": loss_val
-        }
+        ious = torch.stack(outputs).squeeze(1).mean(dim=0)
+        iou_best_truth = ious[0]
+        iou_best_pred = ious[1]
+        iou_avg = ious.mean()
 
-        # TODO consistency with train step logging
-        return {
-            "log": log_dict,
-            "val_loss": log_dict["val_loss"],
-            "progress_bar": log_dict,
+        self.log(
+            "val_iou_best_truth",
+            iou_best_truth,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False,
+            logger=True,
+        )
+        self.log(
+            "val_iou_best_pred",
+            iou_best_pred,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False,
+            logger=True,
+        )
+
+        self.log(
+            "val_iou_avg",
+            iou_avg,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False,
+            logger=True,
+        )
+
+        results = {
+            "val_iou_best_truth": iou_best_truth,
+            "val_iou_best_pred": iou_best_pred,
+            "val_iou_avg": iou_avg
         }
+        return results
 
     def configure_optimizers(self):
         return torch.optim.SGD(self.net.parameters(), lr=self.lr, momentum=0.9)
