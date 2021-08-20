@@ -1,8 +1,10 @@
 import os
-from typing import Dict
+from typing import Dict, Tuple
 
+import hydra
 import pandas as pd
 import torch
+from omegaconf import DictConfig
 from pl_bolts.datamodules.kitti_datamodule import KittiDataModule
 from pytorch_lightning import Trainer, seed_everything
 from tqdm.auto import tqdm
@@ -13,39 +15,43 @@ from trackseg.model import UnsupervisedSemSegment
 
 PROJECT_ROOT = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir))
 
-# TODO move to config file? or to args?
-# TODO save dir only controlling checkpoints, not logs & hparams
-SEED = 42
-VAL_SPLIT = 0.1  # 200 images total: 0.1 = 20
-TEST_SPLIT = 0.1  # 200 images total: 0.1 = 20
-N_CHANNELS = 48
-SAVE_DIR = os.path.join(PROJECT_ROOT, "lightning_out", "kitt_eval_runs")
-RESIZE_SIZE = (188, 621)  # orig kitti size = (376, 1242)
-KITTI_DATA = os.path.join(PROJECT_ROOT, "data", "data_semantics")
-MAX_STEPS = 200
-RESULT_FPATH = f"./kitti_results_{N_CHANNELS}channels_{MAX_STEPS}steps_halfsize.csv"
 
-seed_everything(SEED)
+def get_results_fname(
+    n_channels: int, max_steps: int, resize_size: Tuple[int, int]
+) -> str:
+    return (
+        f"kitti_results_{n_channels}channels_{max_steps}steps"
+        f"_halfsize_resize{resize_size[0]}x{resize_size[1]}.csv"
+    )
 
 
-def train_validate(image: torch.Tensor, target: torch.Tensor) -> Dict[str, float]:
+def train_validate(
+    image: torch.Tensor,
+    target: torch.Tensor,
+    n_channels: int,
+    max_steps: int,
+    resize_size: Tuple[int, int],
+) -> Dict[str, float]:
     # don't need target for inner dm
     inner_dm = SingleImageDataModule(
-        image=image, target=target, normalize=False, num_workers=0
+        image=image,
+        target=target,
+        im_size=resize_size,
+        normalize=False,
+        num_workers=0,
     )
     # new model
     model = UnsupervisedSemSegment(
-        n_channels=N_CHANNELS, connectivity_weight=1.0, similarity_weight=1.0
+        n_channels=n_channels, connectivity_weight=1.0, similarity_weight=1.0
     )
     # train
     trainer = Trainer(
         gpus=1,
-        max_steps=MAX_STEPS,
+        max_steps=max_steps,
         #        weights_save_path=save_dir,
     )
     trainer.fit(model, datamodule=inner_dm)
     model.eval()
-    # TODO resize images before val?
     eval_dl = inner_dm.train_dataloader()
     results = trainer.validate(dataloaders=eval_dl)
     # only expect one result so take 0th index
@@ -53,13 +59,24 @@ def train_validate(image: torch.Tensor, target: torch.Tensor) -> Dict[str, float
     return results
 
 
-def main():
+def main(
+    kitti_data_path: str,
+    kitti_val_split: float,
+    kitti_test_split: float,
+    n_channels: int,
+    max_steps: int,
+    resize_size: Tuple[int, int],
+    result_dir: str,
+    random_seed: int,
+):
+    seed_everything(random_seed)
+
     dm = KittiDataModule(
-        KITTI_DATA,
+        kitti_data_path,
         batch_size=1,
-        val_split=VAL_SPLIT,
-        test_split=TEST_SPLIT,
-        seed=SEED,
+        val_split=kitti_val_split,
+        test_split=kitti_test_split,
+        seed=random_seed,
         num_workers=0,
     )
 
@@ -67,11 +84,39 @@ def main():
     # loop through val dataloader
     for batch in tqdm(dm.val_dataloader(), desc="kitti val dataloader - outer loop"):
         images, targets = batch
-        all_results.append(train_validate(image=images[0], target=targets[0]))
+        all_results.append(
+            train_validate(
+                image=images[0],
+                target=targets[0],
+                n_channels=n_channels,
+                max_steps=max_steps,
+                resize_size=resize_size,
+            )
+        )
 
     df = pd.DataFrame(all_results)
-    df.to_csv(path=RESULT_FPATH)
+    result_fpath = os.path.join(
+        result_dir,
+        get_results_fname(
+            n_channels=n_channels, max_steps=max_steps, resize_size=resize_size
+        ),
+    )
+    df.to_csv(result_fpath)
+
+
+@hydra.main(config_path="../config", config_name="config")
+def my_app(cfg: DictConfig) -> None:
+    main(
+        kitti_data_path=os.path.join(PROJECT_ROOT, cfg.locations.data.kitti),
+        kitti_val_split=cfg.kitti.val_split,
+        kitti_test_split=cfg.kitti.test_split,
+        n_channels=cfg.model.n_channels,
+        max_steps=cfg.model.max_steps,
+        resize_size=tuple(cfg.kitti.resize_size),
+        result_dir=os.path.join(PROJECT_ROOT, cfg.locations.results),
+        random_seed=cfg.general.random_seed,
+    )
 
 
 if __name__ == "__main__":
-    main()
+    my_app()

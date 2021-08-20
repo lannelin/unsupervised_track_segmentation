@@ -1,0 +1,16 @@
+general:
+  random_seed: 42
+
+kitti:
+  val_split: 0.1 # 200 images total: 0.1 = 20
+  test_split: 0.1 # 200 images total: 0.1 = 20
+  resize_size: [188, 621] # 50% of orig kitti size (376, 1242)
+
+model:
+  n_channels: 48
+  max_steps: 10
+
+locations: # relative to PROJECT_ROOT
+  data:
+    kitti: data/data_semantics
+  results: results
