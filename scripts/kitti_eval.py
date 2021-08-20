@@ -4,9 +4,11 @@ from typing import Dict, Tuple
 import hydra
 import pandas as pd
 import torch
+import wandb
 from omegaconf import DictConfig
 from pl_bolts.datamodules.kitti_datamodule import KittiDataModule
 from pytorch_lightning import Trainer, seed_everything
+from pytorch_lightning.loggers import WandbLogger
 from tqdm.auto import tqdm
 
 # isort:imports-firstparty
@@ -16,21 +18,14 @@ from trackseg.model import UnsupervisedSemSegment
 PROJECT_ROOT = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir))
 
 
-def get_results_fname(
-    n_channels: int, max_steps: int, resize_size: Tuple[int, int]
-) -> str:
-    return (
-        f"kitti_results_{n_channels}channels_{max_steps}steps"
-        f"_halfsize_resize{resize_size[0]}x{resize_size[1]}.csv"
-    )
-
-
 def train_validate(
     image: torch.Tensor,
     target: torch.Tensor,
     n_channels: int,
     max_steps: int,
     resize_size: Tuple[int, int],
+    run_id: str,
+    iteration: int,
 ) -> Dict[str, float]:
     # don't need target for inner dm
     inner_dm = SingleImageDataModule(
@@ -45,15 +40,17 @@ def train_validate(
         n_channels=n_channels, connectivity_weight=1.0, similarity_weight=1.0
     )
     # train
-    trainer = Trainer(
-        gpus=1,
-        max_steps=max_steps,
-        #        weights_save_path=save_dir,
-    )
+    wandb_logger = WandbLogger(id=run_id, prefix=str(iteration))
+    trainer = Trainer(gpus=1, max_steps=max_steps, logger=wandb_logger)
+
     trainer.fit(model, datamodule=inner_dm)
     model.eval()
     eval_dl = inner_dm.train_dataloader()
     results = trainer.validate(dataloaders=eval_dl)
+
+    # close logger
+    trainer.logger.close()
+
     # only expect one result so take 0th index
     results = results[0]
     return results
@@ -66,7 +63,7 @@ def main(
     n_channels: int,
     max_steps: int,
     resize_size: Tuple[int, int],
-    result_dir: str,
+    wandb_project_name: str,
     random_seed: int,
 ):
     seed_everything(random_seed)
@@ -80,9 +77,13 @@ def main(
         num_workers=0,
     )
 
+    wandb_run = wandb.init(project=wandb_project_name)
+
     all_results = list()
     # loop through val dataloader
-    for batch in tqdm(dm.val_dataloader(), desc="kitti val dataloader - outer loop"):
+    for i, batch in enumerate(
+        tqdm(dm.val_dataloader(), desc="kitti val dataloader - outer loop")
+    ):
         images, targets = batch
         all_results.append(
             train_validate(
@@ -91,17 +92,15 @@ def main(
                 n_channels=n_channels,
                 max_steps=max_steps,
                 resize_size=resize_size,
+                run_id=wandb_run.id,
+                iteration=i,
             )
         )
 
     df = pd.DataFrame(all_results)
-    result_fpath = os.path.join(
-        result_dir,
-        get_results_fname(
-            n_channels=n_channels, max_steps=max_steps, resize_size=resize_size
-        ),
-    )
-    df.to_csv(result_fpath)
+    result_dict = df.mean().add_prefix("FINAL_").to_dict()
+    wandb_run.log(result_dict)
+    wandb_run.finish()
 
 
 @hydra.main(config_path="../config", config_name="config")
@@ -113,7 +112,7 @@ def my_app(cfg: DictConfig) -> None:
         n_channels=cfg.model.n_channels,
         max_steps=cfg.model.max_steps,
         resize_size=tuple(cfg.kitti.resize_size),
-        result_dir=os.path.join(PROJECT_ROOT, cfg.locations.results),
+        wandb_project_name=cfg.wandb.project,
         random_seed=cfg.general.random_seed,
     )
 
