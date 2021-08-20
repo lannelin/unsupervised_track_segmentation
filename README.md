@@ -19,7 +19,8 @@ Original implementation available [here](https://github.com/kanezaki/pytorch-uns
   - [x] mp4
 - [x] review why crossentropy between cluster labels and features works
 - [ ] **evaluation code** - want to check whether things improve
-  - [ ] should be able to eval loop through to get overall score
+  - [x] should be able to eval loop through to get overall score
+  - [ ] hacky evaluate of demo.py (importlib, sys.argv) 
 - [ ] able to substitute MyNet for UNet
 - [ ] use predictions of previous frame (or some window) to calc loss? should have similar predictions
     - probably don't want to run these in the same batch though as too similar? want to shuffle...
