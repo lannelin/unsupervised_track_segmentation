@@ -204,11 +204,16 @@ class SingleImageDataModule(LightningDataModule):
         self.pin_memory = pin_memory
         self.drop_last = False
 
-        transforms = self.train_transforms or get_transforms(
+        image_transforms = self.train_transforms or get_transforms(
             normalize=normalize, resize_size=self.resize_size
         )
+
+        target_transforms = get_transforms(
+            normalize=False, resize_size=self.resize_size
+        )
+
         self.train_dataset = SingleImageDataset(
-            image=image, target=target, transform=transforms
+            image=image, target=target, image_transform=image_transforms, target_transform=target_transforms,
         )
 
     def train_dataloader(self):

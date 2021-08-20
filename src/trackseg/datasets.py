@@ -146,25 +146,34 @@ class SingleImageDataset(Dataset):
         self,
         image: torch.Tensor,
         target: Optional[torch.Tensor] = None,
-        transform: Optional[Callable] = None,
+        image_transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
     ):
         self.data = image.unsqueeze(0)
         self.target = target.unsqueeze(0) if target is not None else None
-        self.transform = transform
+        self.image_transform = image_transform
+        self.target_transform = target_transform
 
     def __len__(self):
         return 1
 
     def __getitem__(self, idx):
-        img = self.data[idx]  # to CHW
+        img = self.data[idx]  # CHW
 
-        if self.transform is not None:
+        if self.image_transform is not None:
             to_pil = transform_lib.ToPILImage()
             img = to_pil(img)  # then to PIL
-            img = self.transform(img)
+            img = self.image_transform(img)
 
         if self.target is None:
+            # if no target then just return image
             return img
         else:
+            # otherwise check for target transform and return image and target
             target = self.target[idx]
+            if self.target_transform is not None:
+                to_pil = transform_lib.ToPILImage()
+                target = to_pil(target)  # then to PIL
+                target = self.target_transform(target).squeeze() # drop first dim
+
             return img, target
