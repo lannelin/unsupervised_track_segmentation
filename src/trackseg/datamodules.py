@@ -174,8 +174,9 @@ class UnsupervisedSegmentationDataModule(LightningDataModule):
         return loader
 
 
-class SingleImageDataModule(LightningDataModule):
+class UnsupervisedSingleImageDataModule(LightningDataModule):
     train_dataset = None
+    test_dataset = None
 
     def __init__(
         self,
@@ -213,12 +214,33 @@ class SingleImageDataModule(LightningDataModule):
         )
 
         self.train_dataset = SingleImageDataset(
-            image=image, target=target, image_transform=image_transforms, target_transform=target_transforms,
+            image=image,
+            target=None,
+            image_transform=image_transforms,
+            target_transform=target_transforms,
         )
+
+        if target is not None:
+            self.test_dataset = SingleImageDataset(
+                image=image,
+                target=target,
+                image_transform=image_transforms,
+                target_transform=target_transforms,
+            )
 
     def train_dataloader(self):
         return DataLoader(
             self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=self.shuffle,
+            num_workers=self.num_workers,
+            drop_last=self.drop_last,
+            pin_memory=self.pin_memory,
+        )
+
+    def test_dataloader(self):
+        return DataLoader(
+            self.test_dataset,
             batch_size=self.batch_size,
             shuffle=self.shuffle,
             num_workers=self.num_workers,

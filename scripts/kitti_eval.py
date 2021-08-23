@@ -12,7 +12,7 @@ from pytorch_lightning.loggers import WandbLogger
 from tqdm.auto import tqdm
 
 # isort:imports-firstparty
-from trackseg.datamodules import SingleImageDataModule
+from trackseg.datamodules import UnsupervisedSingleImageDataModule
 from trackseg.model import UnsupervisedSemSegment
 
 PROJECT_ROOT = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir))
@@ -28,7 +28,7 @@ def train_validate(
     iteration: int,
 ) -> Dict[str, float]:
     # don't need target for inner dm
-    inner_dm = SingleImageDataModule(
+    inner_dm = UnsupervisedSingleImageDataModule(
         image=image,
         target=target,
         im_size=resize_size,
@@ -45,8 +45,8 @@ def train_validate(
 
     trainer.fit(model, datamodule=inner_dm)
     model.eval()
-    eval_dl = inner_dm.train_dataloader()
-    results = trainer.validate(dataloaders=eval_dl)
+    # use test_dataloader here that also returns target
+    results = trainer.validate(dataloaders=inner_dm.test_dataloader())
 
     # close logger
     trainer.logger.close()

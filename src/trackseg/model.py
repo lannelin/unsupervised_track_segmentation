@@ -120,7 +120,7 @@ class UnsupervisedSemSegment(LightningModule):
         return loss_val, avg_n_labels
 
     def training_step(self, batch, batch_nb):
-        images, _ = batch
+        images = batch
         loss_val, avg_n_labels = self._step(images=images)
 
         self.log(
