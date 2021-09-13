@@ -128,6 +128,10 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# project specific
 data
 lightning_out
 lightning_logs
+/scripts/outputs
+/scripts/multirun
+/outputs
