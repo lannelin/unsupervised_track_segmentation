@@ -28,6 +28,7 @@ Original implementation available [here](https://github.com/kanezaki/pytorch-uns
 - [ ] scribbles?
 - [ ] validation during training?
 - [ ] correct pixel metric? some overall % pixel assigment correct in image
+- [ ] poetry?
 
 
 ## Notes
