@@ -17,11 +17,17 @@ with Poetry and [Poe the Poet](https://github.com/nat-n/poethepoet):
 
 ```bash
 poetry install
+poetry shell # drop into poetry shell for ease of using poe
 poe force-cuda11 # installs pytorch for cuda11
 poe add-lightning # install pytorch-lightning and lightning-bolts without attempting to reinstall pytorch cpu
 ```
 
 keeping an eye on https://github.com/python-poetry/poetry/issues/2613 for making this smoother.
+
+Add to `PYTHONPATH` (for running scripts)
+```bash
+export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+```
 
 ## TODOs
 
