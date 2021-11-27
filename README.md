@@ -11,6 +11,24 @@ Unsupervised segmentation of video frames with the goal of detection bounds of a
 Building on technique described in [Kim, Kanezaki & Tanaka 2020](https://arxiv.org/abs/2007.09990).
 Original implementation available [here](https://github.com/kanezaki/pytorch-unsupervised-segmentation-tip).
 
+## Install
+
+with Poetry and [Poe the Poet](https://github.com/nat-n/poethepoet):
+
+```bash
+poetry install
+poetry shell # drop into poetry shell for ease of using poe
+poe force-cuda11 # installs pytorch for cuda11
+poe add-lightning # install pytorch-lightning and lightning-bolts without attempting to reinstall pytorch cpu
+```
+
+keeping an eye on https://github.com/python-poetry/poetry/issues/2613 for making this smoother.
+
+Add to `PYTHONPATH` (for running scripts)
+```bash
+export PYTHONPATH=$(pwd)/src:$PYTHONPATH
+```
+
 ## TODOs
 
 - [ ] move TODOs to issues...
@@ -28,7 +46,6 @@ Original implementation available [here](https://github.com/kanezaki/pytorch-uns
 - [ ] scribbles?
 - [ ] validation during training?
 - [ ] correct pixel metric? some overall % pixel assigment correct in image
-- [ ] poetry?
 
 
 ## Notes
